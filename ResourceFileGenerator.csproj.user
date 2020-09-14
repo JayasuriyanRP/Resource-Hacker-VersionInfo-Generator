@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+    <StartArguments>--v "1.0.2.0" --cn "ABB Oy." --d "ABB Virtual Drive Installer" --i "ABB Virtual Drive Installer" --c "Copyright \xA9 2018-2020 ABB Oy." --s "C:\Users\INJARP\Desktop\Resource Hacker\ABB_VirtualDrives_V1_0_1_33_Azure.exe"</StartArguments>
+  </PropertyGroup>
+</Project>

@@ -1,4 +1,7 @@
-﻿using System;
+﻿using NDesk.Options;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -6,62 +9,167 @@ namespace ResourceFileGenerator
 {
     public class Program
     {
+        private const string ResourceHackerEXE = "ResourceHacker.exe";
+
         public static void Main(string[] args)
         {
-            if (args.Length > 0)
+            string version = null;
+            string companyName = null;
+            string fileDescription = null;
+            string internalName = null;
+            string legalCopyright = null;
+            string setupPath = null;
+            string logoPath = null;
+            bool showHelp = false;
+            OptionSet optionSet = new OptionSet()
             {
-                string version = args[0];
-                string companyName = args[1];
-                string fileDescription = args[2];
-                string internalName = args[3];
-                string legalCopyright = args[4];
-                string originalFileName = args[5];
-                string privateBuild = args[6];
-                StringBuilder stringBuilder = new StringBuilder();
-                stringBuilder.AppendLine("1 VERSIONINFO");
-                stringBuilder.AppendLine($"FILEVERSION {version.Replace('.', ',')}");
-                stringBuilder.AppendLine($"PRODUCTVERSION {version.Replace('.', ',')}");
-                stringBuilder.AppendLine("FILEOS 0x40004");
-                stringBuilder.AppendLine("FILETYPE 0x1 \n{");
-                stringBuilder.AppendLine("BLOCK \"StringFileInfo\" \n{ \n\tBLOCK \"000004B0\" \n\t{");
-                stringBuilder.AppendLine($"\t\tVALUE \"CompanyName\", \"{companyName}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"FileDescription\", \"{fileDescription}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"FileVersion\", \"{version}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"InternalName\", \"{internalName}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"LegalCopyright\", \"{legalCopyright}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"OriginalFilename\", \"{originalFileName}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"PrivateBuild\", \"{privateBuild}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"ProductName\", \"{internalName}\"");
-                stringBuilder.AppendLine($"\t\tVALUE \"ProductVersion\", \"{version}\"");
-                stringBuilder.AppendLine($"\t}}\n}}\n");
+                { "v|version=", "the {version} of installer.", v =>  version =v},
+                { "cn|companyName=", "Installer Company Name", v => companyName = v },
+                { "d|fileDescription=", "File Description", v => fileDescription = v },
+                { "i|internalName=", "Internal Name of the file", v => internalName = v },
+                { "c|legalCopyright=", "Copyright Information", v => legalCopyright = v },
+                { "s|setupPath=", "SetupInstallerPath", v => setupPath = v },
+                { "l|logoPath=", "Logo for updating", v => logoPath = v },
+                { "h|help", "Help Information", v => showHelp = v != null},
+            };
+            try
+            {
+                List<string> parser = optionSet.Parse(args);
 
-                stringBuilder.AppendLine("BLOCK \"VarFileInfo\" \n{");
-                stringBuilder.AppendLine($"\tVALUE \"Translation\", 0x0000 0x04B0 ");
-                stringBuilder.AppendLine($"}}\n}}");
-
-                string newFilePath = Path.Combine(Directory.GetCurrentDirectory(), $"{internalName}.rc");
-                if (File.Exists(newFilePath))
+                if (args.Length > 0)
                 {
-                    File.Delete(newFilePath);
+                    if (logoPath == null)
+                    {
+                        logoPath = Path.Combine(Directory.GetCurrentDirectory(), @"ResourceHacker\Logo_ABB.ico");
+                    }
+
+                    StringBuilder stringBuilder = new StringBuilder();
+                    stringBuilder.AppendLine("1 VERSIONINFO");
+                    stringBuilder.AppendLine($"FILEVERSION {version.Replace('.', ',')}");
+                    stringBuilder.AppendLine($"PRODUCTVERSION {version.Replace('.', ',')}");
+                    stringBuilder.AppendLine("FILEOS 0x40004");
+                    stringBuilder.AppendLine("FILETYPE 0x1 \n{");
+                    stringBuilder.AppendLine("BLOCK \"StringFileInfo\" \n{ \n\tBLOCK \"000004B0\" \n\t{");
+                    stringBuilder.AppendLine($"\t\tVALUE \"CompanyName\", \"{companyName}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"FileDescription\", \"{fileDescription}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"FileVersion\", \"{version}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"InternalName\", \"{internalName}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"LegalCopyright\", \"{legalCopyright}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"OriginalFilename\", \"{Path.GetFileName(setupPath)}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"PrivateBuild\", \"{DateTime.Now:yyyy.MMdd}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"ProductName\", \"{internalName}\"");
+                    stringBuilder.AppendLine($"\t\tVALUE \"ProductVersion\", \"{version}\"");
+                    stringBuilder.AppendLine($"\t}}\n}}\n");
+
+                    stringBuilder.AppendLine("BLOCK \"VarFileInfo\" \n{");
+                    stringBuilder.AppendLine($"\tVALUE \"Translation\", 0x0000 0x04B0 ");
+                    stringBuilder.AppendLine($"}}\n}}");
+
+                    string directory = Path.GetDirectoryName(setupPath);
+                    string newFileName = $"{Path.GetFileNameWithoutExtension(setupPath)}";
+
+                    if (File.Exists(setupPath))
+                    {
+                        string rcFile = $"{newFileName}.rc";
+                        string rcFilePath = Path.Combine(directory, rcFile);
+                        string resFile = $"{newFileName}.res";
+                        string resFilePath = Path.Combine(directory, resFile);
+
+                        CreateRCFile(stringBuilder, rcFilePath);
+                        CompileRcToResFile(rcFilePath, resFilePath);
+                        ReplaceResIntoSetup(resFilePath, setupPath);
+                        ReplaceLogoIntoSetup(logoPath, setupPath);
+
+                        if (File.Exists(rcFilePath))
+                        {
+                            File.Delete(rcFilePath);
+                        }
+                        if (File.Exists(resFilePath))
+                        {
+                            File.Delete(resFilePath);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("File Doesnt Exits");
+                    }
                 }
-
-                using (FileStream fileToWrite = File.Create(newFilePath, 1024, FileOptions.Asynchronous))
+                else
                 {
-                    byte[] textByte = new UTF8Encoding(true).GetBytes(stringBuilder.ToString());
-                    fileToWrite.Write(textByte, 0, textByte.Length);
+                    Console.WriteLine($"The Arguments passed are incorrect, Please pass the following arguments" +
+                        $"\n-FileVersion," +
+                        $"\n-CompanyName," +
+                        $"\n-FileDescription," +
+                        $"\n-InternalName" +
+                        $"\n-LegalCopyright" +
+                        $"\n-OriginalileName" +
+                        $"\n-PrivateBuild");
                 }
             }
-            else
+            catch (OptionException e)
             {
-                Console.WriteLine($"The Arguments passed are incorrect, Please pass the following arguments" +
-                    $"\n-FileVersion," +
-                    $"\n-CompanyName," +
-                    $"\n-FileDescription," +
-                    $"\n-InternalName" +
-                    $"\n-LegalCopyright" +
-                    $"\n-OriginalileName" +
-                    $"\n-PrivateBuild");
+                Console.WriteLine(e.Message);
+                Console.WriteLine("Try `--help' for more information.");
+                return;
             }
+        }
+
+        private static void CompileRcToResFile(string rcFilePath, string resFilePath)
+        {
+            Console.WriteLine("\nCompiling RC file to RES ");
+            string compileResourceArgs = $"-open \"{rcFilePath}\" -save \"{resFilePath}\" -action compile -log COMPILE";
+            RunResourceHackerProcess(compileResourceArgs);
+        }
+
+        private static void CreateRCFile(StringBuilder stringBuilder, string rcFilePath)
+        {
+            if (File.Exists(rcFilePath))
+            {
+                File.Delete(rcFilePath);
+            }
+
+            using (FileStream fileToWrite = File.Create(rcFilePath, 1024, FileOptions.Asynchronous))
+            {
+                byte[] textByte = new UTF8Encoding(true).GetBytes(stringBuilder.ToString());
+                fileToWrite.Write(textByte, 0, textByte.Length);
+            }
+        }
+
+        private static void ReplaceLogoIntoSetup(string logoPath, string setupPath)
+        {
+            Console.WriteLine("\nReplacing Logo");
+            string replaceLogoArgs = $"-open \"{setupPath}\" -save \"{setupPath}\" -action add -res \"{logoPath}\" -mask ICONGROUP ,101,1049 -log CONSOLE";
+
+            RunResourceHackerProcess(replaceLogoArgs);
+        }
+
+        private static void ReplaceResIntoSetup(string resFilePath, string setupPath)
+        {
+            Console.WriteLine("\nRemoving Version Info resourcefile 1,1033");
+
+            string removeVersionInfoArgs = $"-open \"{setupPath}\" -save \"{setupPath}\"  -action delete -mask VERSIONINFO,1,1033 -log CONSOLE";
+            RunResourceHackerProcess(removeVersionInfoArgs);
+
+            Console.WriteLine("\nAdding Version Info resourcefile 1,1033");
+            string replaceVersionInfoArgs = $"-open \"{setupPath}\" -save \"{setupPath}\"  -action addoverwrite -res \"{resFilePath}\" -mask VERSIONINFO,1,0 -log CONSOLE";
+
+            RunResourceHackerProcess(replaceVersionInfoArgs);
+        }
+
+        private static void RunResourceHackerProcess(string arguments)
+        {
+            ProcessStartInfo processStartInfo = new ProcessStartInfo()
+            {
+                FileName = Path.Combine(Directory.GetCurrentDirectory(), $"ResourceHacker\\{ResourceHackerEXE}"),
+                Arguments = arguments,
+                UseShellExecute = false
+            };
+            Process process = new Process()
+            {
+                StartInfo = processStartInfo
+            };
+            process.Start();
+            process.WaitForExit();
         }
     }
 }
